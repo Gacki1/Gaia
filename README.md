@@ -1,325 +1,316 @@
-# Gaia — ein Planet in C++17 und Vulkan, von Hand
+*English · [Deutsch](README.de.md)*
 
-Ein Planet in Star-Citizen-Maßstab: **1000 km Radius, eine Welteinheit = ein
-Meter**, durchgehend befliegbar vom Orbit bis auf **Submeter-Bodendetail**
-(LOD-Tiefe 18, ~0,48 m Zellen), ohne Ladebildschirm. Kein UE5, kein Godot, keine
-Engine — C++17, Vulkan 1.1, eigenes Fenster, eigene Mathematik, eigener
-Bildlader, eigener Font-Atlas.
+# Gaia — a planet in C++17 and Vulkan, by hand
 
-Ich baue das, weil ich wissen will, wie es *wirklich* funktioniert. Eine Engine
-hätte mir jedes Problem in diesem README abgenommen — und damit auch alles, was
-ich dabei gelernt habe.
+A planet at Star Citizen scale: **1000 km radius, one world unit = one metre**,
+flyable end to end from orbit down to **sub-metre ground detail** (LOD depth 18,
+~0.48 m cells), with no loading screen. No UE5, no Godot, no engine — C++17,
+Vulkan 1.1, my own window, my own maths, my own image loader, my own font atlas.
 
-![Aus dem Orbit](docs/orbit.png)
+I am building this because I want to know how it *actually* works. An engine
+would have solved every problem in this README for me — and taken everything I
+learned from them along with it.
+
+![From orbit](docs/orbit.png)
 
 | | |
 |---|---|
-| ![Gebirgskette](docs/range.png) | ![Boden](docs/ground.png) |
+| ![Mountain range](docs/range.png) | ![Ground](docs/ground.png) |
 | ![Cockpit](docs/cockpit.png) | |
 
 ---
 
-## Was schon da ist
+## What is already there
 
-**Gelände.** Würfelkugel mit Quadtree-LOD pro Fläche, Frustum-Culling,
-Geomorphing. Das Höhenfeld ist zweibandig: ein Kontinentalband mit fest 8
-Oktaven (LOD-invariant, damit die Küstenlinie sich nie bewegt) plus ein
-Detailband, dessen Oktavzahl mit dem LOD wächst — über ein präfixsicheres fBm
-mit **festem** Normalisierer, damit eine zusätzliche Oktave die vorhandenen
-nicht umskaliert.
+**Terrain.** A cube-sphere with a per-face quadtree LOD, frustum culling and
+geomorphing. The height field has two bands: a continental band at a fixed 8
+octaves (LOD-invariant, so the coastline can never move) plus a detail band whose
+octave count grows with the LOD level — through a prefix-safe fBm with a **fixed**
+normaliser, so that adding an octave does not rescale the ones already there.
 
-Gemessen: Landhöhe p50 537 m, p90 1485 m, max 6478 m. Lokales Relief über 2 km
-Radius p50 261 m, p90 1030 m, max 3619 m (zum Vergleich: Alpen ~800 m, Himalaya
-~1500 m). Neigung p50 6,8°, p90 27,0°.
+Measured: land height p50 537 m, p90 1485 m, max 6478 m. Local relief over a 2 km
+radius p50 261 m, p90 1030 m, max 3619 m (for scale: the Alps ~800 m, the
+Himalaya ~1500 m). Slope p50 6.8°, p90 27.0°.
 
-**Plattentektonik statt Rauschen für die Wahrzeichen.** 10 Fibonacci-verteilte,
-per Seed verwackelte Plattenkeime; `plateAt` ist eine lineare Suche über zehn
-Skalarprodukte und liefert die nächste und zweitnächste Platte. Von ~24 Grenzen
-tragen **4** ein Gebirge, ausgewählt nach ihrer **Landlänge** — nicht per Hash,
-denn per Hash lag eine Kette vollständig und eine zu 93 % im Meer.
+**Plate tectonics instead of noise for the landmarks.** Ten Fibonacci-distributed
+plate seeds, jittered from the planet seed; `plateAt` is a linear scan over ten
+dot products and returns the nearest and second-nearest plate. Of ~24 boundaries,
+**4** carry a mountain range, chosen by their **on-land length** — not by a hash,
+because by hash one range lay entirely and another 93% in the sea.
 
-Jede Kette ist ein **Gürtel** aus 1–3 parallelen Graten mit Längstälern
-dazwischen, 62–118 km breit, 1101–1287 km lang. Alle Eigenschaften kommen aus
-einem Hash der Grenzidentität: Grathöhe, -breite, -schärfe, Asymmetrie,
-Terrassierung, Gratzahl, Gratabstand, Vorzeichen (ein Viertel der Ketten sind
-Grabenbrüche statt Gebirge). Die beiden ähnlichsten Ketten unterscheiden sich
-noch um 0,57 in ihrer stärksten Dimension — und zwar nur auf Achsen, die auch
-gerendert werden.
+Each range is a **belt** of 1–3 parallel ridges with longitudinal valleys between
+them, 62–118 km wide and 1101–1287 km long. Every property comes from a hash of
+the boundary identity: crest height, width and sharpness, asymmetry, terracing,
+ridge count, ridge spacing, and sign (a quarter of the ranges are rift valleys
+rather than mountains). The two most alike ranges still differ by 0.57 in their
+strongest dimension — and only on axes that actually get rendered.
 
-Die Grenze wird **domain-gewarpt**: nicht der Abstand zur Grenze, sondern die
-Richtung *vor* der Partitionsabfrage. Tortuosität des Kamms 1,400 auf 1136 km
-gelaufener Strecke, 88 km Abweichung vom Großkreis. Die Gürtel bedecken 5,1 %
-des Landes.
+The boundary is **domain-warped**: not the distance to the boundary, but the
+direction, *before* the partition is looked up. Crest tortuosity 1.400 over
+1136 km of walked crest, 88 km of departure from a great circle. The belts cover
+5.1% of the land.
 
-**Materialien.** Sechs triplanar projizierte Bodentexturen in einem
-Sampler-Array, gemischt über acht Vertex-Gewichte à ein Byte. Die Auswahl folgt
-den **Klimazonen** (Höhe, Neigung, Breite, Feuchte) — dieselben vier Größen, die
-auch die Palette benutzt, damit Materialgrenze und Farbgrenze dieselbe Linie
-sind. Ein Klimaslot darf mehrere Texturen als **Varianten** führen, ausgewählt
-über ein Kronendach-Feld; Texturen werden geteilt, eine Variante auf einer schon
-geladenen Textur kostet also nichts.
+**Materials.** Six triplanar-projected ground textures in one sampler array,
+blended through eight one-byte vertex weights. Selection follows the **climate
+zones** (elevation, slope, latitude, moisture) — the same four quantities the
+palette uses, so that a material boundary and a colour boundary are the same line
+on the ground. A climate slot may hold several textures as **variants**, chosen by
+a canopy field; layers are shared, so a variant that reuses a texture already in
+the set costs nothing at all.
 
-**Atmosphäre.** HDR-Offscreen-Ziel, Composite-Pass mit Tonemapping,
-Rayleigh-Streuung mit Luftperspektive, Sonnenscheibe. Reversed-Z mit unendlicher
-Fernebene — bei 10⁹ m ist die Tiefe noch > 0.
+**Atmosphere.** An HDR offscreen target, a composite pass with tonemapping,
+Rayleigh scattering with aerial perspective, and a sun disc. Reversed-Z with an
+infinite far plane — at 10⁹ m the depth is still > 0.
 
-**Schiff.** Flugmodell mit Flugassistent, Cockpit mit Schaltern, Fahrwerk,
-Landung, Quantum-Antrieb zu sechs Außenposten. Die Landung ist ein Test: sie muss
-auf allen vier Beinen aufsetzen, gemessen 4/4 bei 1,7° Neigung.
+**Ship.** A flight model with a flight assist, a cockpit with switches, landing
+gear, landing, and a quantum drive to six outposts. The landing is a test: it has
+to touch down on all four legs, measured 4/4 at 1.9° of tilt.
 
-**Editor.** Im Kreativmodus ein Werkzeug-UI für alle Laufzeitparameter des
-Planeten, mit Live-Neuaufbau. Planeten sind Textdateien; eine Tabelle speist
-Editor, Schreiber und Leser, damit die drei nicht auseinanderlaufen. 16
-Validierungsprüfungen weisen ungültige Parametersätze ab, statt sie zu zeichnen.
+**Editor.** A tool-style UI in creative mode for every runtime parameter of the
+planet, with a live rebuild. Planets are text files; one table feeds the editor,
+the writer and the reader so the three cannot drift apart. Sixteen validation
+checks reject an invalid parameter set instead of drawing it.
 
-**Tests.** Ein kopfloses Testbinary mit **463 Zusicherungen**, das ohne Vulkan
-läuft.
+**Tests.** A headless test binary with **463 assertions** that runs without
+Vulkan.
 
-Bildraten ohne Validierungsschicht: 104–252 fps, alles über 60.
+Frame rates without the validation layer: 104–252 fps, all above 60.
 
 ---
 
-## Wie ich es gemacht habe
+## How I did it
 
-Das ist der Teil, der mir am meisten gebracht hat. Vier Regeln, alle durch
-Schaden gelernt:
+This is the part that taught me the most. Four rules, every one of them learned
+the hard way:
 
-**1. Entscheidungen gehören in Vulkan-freie Header.** Alles, was das Gelände
-bestimmt, steht in Headern ohne eine einzige Vulkan-Abhängigkeit. Deshalb kann
-ein kopfloses Testbinary sie festnageln, und deshalb kann ich eine Behauptung
-über den Planeten *messen* statt sie anzuschauen.
+**1. Decisions belong in Vulkan-free headers.** Everything that determines the
+terrain lives in headers with not a single Vulkan dependency. That is why a
+headless test binary can pin them down, and why I can *measure* a claim about the
+planet instead of looking at it.
 
-**2. Jede Schwelle sitzt auf einem gemessenen Quantil, nie auf dem, was auf einer
-0..1-Skala sinnvoll aussieht.** Das ist die Regel, die ich am häufigsten verletzt
-und am teuersten bezahlt habe. Ein fBm mit Gain 0,38 füllt [0,1] nicht — es
-stapelt sich um die Mitte. Ein Band, das auf dem Papier vernünftig wirkt, gibt
-einer Variante 99 % der Fläche und macht die andere unerreichbar. Der Test
-druckt deshalb erst die Verteilung, dann setze ich die Konstante.
+**2. Every threshold sits on a measured quantile, never on what looks sensible on
+a 0..1 scale.** This is the rule I broke most often and paid for most dearly. An
+fBm with a gain of 0.38 does not fill [0,1] — it piles up around the middle. A
+band that looks reasonable on paper hands one variant 99% of the ground and makes
+the other unreachable. So the test prints the distribution first, and then I set
+the constant.
 
-**3. Ein A/B ist erst ein Befund, wenn der Build bewiesen ist.** Siehe unten.
+**3. An A/B is not a finding until the build is proven.** See below.
 
-**4. Ein Test, der auf 8 Stichproben bestehen kann, misst nicht, was er
-behauptet.** Drei meiner eigenen Tests waren so gebaut. Der Kammwanderungs-Test
-lief 64 km auf einer 1287-km-Kette und erfüllte damit sein Tortuositätsband;
-jetzt ist die gelaufene Länge Teil der Zusicherung. Der Einzigartigkeits-Test
-zählte `peakRelief` als Unterscheidungsdimension — ein Feld, das das Gelände
-**nie liest**. Und der Test, der die LOD-Kugel absichern sollte, prüfte sie gegen
-dieselbe falsche Fläche wie der Code.
-
----
-
-## Technische Schwierigkeiten
-
-Die interessanten. Alle Zahlen sind gemessen, nicht geschätzt.
-
-### Die enge LOD-Kugel umschloss eine Fläche, auf der kein Vertex liegt
-
-Die Kugel, mit der das LOD den Abstand zu einem Patch misst, wurde aus
-`terrainRadius` gebaut — und Detailband und Felstürme kommen erst danach obendrauf.
-Jeder Vertex saß also um etwa die lokale Detailhöhe **außerhalb** seiner eigenen
-Kugel. Weil die Split-Regel den Abstand als `|cam − Mitte| − surfaceRadius` misst
-und das Geomorph-Band aus derselben Beziehung folgt, wurde ein Patch aufgegeben,
-*bevor* seine Vertices fertig gemorpht waren: auf Ebene 17 kleinster
-Morph-Faktor 0,0000 mit 0,27 m Restsprung.
-
-Der Test, der genau das prüfen sollte, verglich ebenfalls gegen `terrainRadius`
-— er bestand, während die Zusicherung verletzt war. Beide korrigiert:
-Restschlupf jetzt 0,0 m bei 13×13-Abtastung, Morph auf allen Ebenen 1,0000.
-
-Bloßer Zuschlag wäre hier falsch gewesen: 3 km auf eine 12-m-Kugel addiert macht
-den Abstand ≈ 0 und unterteilt alles bis zur Maximaltiefe — das ist der
-461 517-Blatt-Absturz, den der Dateikopf dokumentiert. Die echte Oberfläche
-abzutasten verschiebt den **Mittelpunkt** mit, die Kugel bleibt eng.
-
-### „Dünen-Wellen": der Knick in `ridge(n) = (1 − |n|)²`
-
-Feine dunkle Fäden in geschlossenen Schleifen über flachem Gelände, überall.
-Die Ableitung springt bei n = 0 von +2 auf −2 — ein echter Knick, und der ist
-*Absicht*, er macht die Messergrate. Nur kreuzt das Rauschen überall die Null,
-auch wo das Band fast keine Amplitude hat, und die Nulldurchgänge eines
-Rauschfelds sind **geschlossene Schleifen**.
-
-Der Beweis lief über zwei Schnitte: ohne jede gescannte Textur bleiben sie (also
-Geometrie, nicht Material), mit abgeschalteter Ridge-Faltung verschwinden sie.
-Dazwischen habe ich Terrassierung, Plateau-Terrassierung, Felstürme und das
-Triplanar ausgeschlossen — alle unschuldig.
-
-Behoben mit `sqrt(n² + ε²) − ε`, normiert damit `ridge(±1)` weiterhin exakt den
-Talboden trifft. Der erste Versuch fiel durch: die Glättung **beiden**
-Verbrauchern zu geben schob die Relief-Höhen-Korrelation von 0,155 auf 0,204
-gegen eine 0,20-Schranke, weil die Verteilung der Faltung die Reliefquantile
-setzt. Getrennt — scharf für das Reliefeld, weich für das Höhenband — liegt sie
-bei 0,106.
-
-### Warum man den Eingang eines hochfrequenten Feldes nicht örtlich verzerrt
-
-Ich wollte Rippen, die die Bergflanke hinunterlaufen, und habe dafür das
-Detailband quer zum Gürtel gestaucht, eingeblendet mit der Kettenhöhe. Es gab
-Rippen — und konzentrische Höhenlinien-Ringe über jedem Berg des Planeten.
-
-Die Arithmetik sagt warum: das Detailband wird bei Basisfrequenz ~345 abgetastet,
-eine Verschiebung von 0,33 im Eingang sind also **114 Rauschperioden**. Der
-Streckfaktor variierte mit `|orogeny|`, dessen Niveaulinien parallel zum Grat
-laufen — das Rauschen glitt um Dutzende Perioden entlang genau dieser Linien und
-zeichnete sie. Jede örtlich variierende Verzerrung eines hochfrequenten Felds
-tut das; nur eine konstante ist sicher, und die hat eine Naht am Gürtelrand.
-
-### Ein Domain-Warp kann nicht reißen — aber er kann falten
-
-Der erste Warp verschob den **Abstand** zur Plattengrenze um einen Skalar. Bei
-0,5 Gratbreiten war die Kette noch ein Lineal, bei 1,3 zerfiel sie in eine
-gepunktete Reihe von Buckeln: ein Abstandsversatz bewegt jeden Punkt des Kamms
-einzeln und reißt ihn auseinander.
-
-Auf dem **Eingang** angewendet bewegt sich das Feld zusammenhängend, die Kette
-kann nicht mehr reißen. Aber sie kann sich falten. Tortuosität gegen
-Warp-Frequenz bei Amplitude 0,20: 2,5 → 1,06 (Lineal), 6,0 → 1,60 (gut),
-10,0 → **17,1**, 16,0 → die Kette zerfällt nach 144 km. Die letzten zwei sind
-derselbe Fehler: ein Domain-Warp hört auf **injektiv** zu sein, sobald der
-Verschiebungsgradient 1 erreicht, und dann hat eine Grenze mehrere Urbilder. Der
-Test prüft deshalb ein **Band**; einseitig hätte er die 17,1 mit Bestnote
-durchgelassen.
-
-### Der Zenit-Sprung: `cos(π/2) = −4,4·10⁻⁸`
-
-Die Kamerabasis wurde aus `right = cross(worldUp, forward)` gebaut. Zeigt
-`forward` fast gerade nach oben, ist das Kreuzprodukt fast Null — und in float
-ist `cos(π/2)` nicht 0, sondern −4,4·10⁻⁸. Der normalisierte Vektor zeigt dann in
-eine beliebige Richtung und **springt um 180° für 10⁻⁴ Radiant Nick**. Gemessen:
-180,0° (Euler) gegen 0,0198° (Quaternion). Behoben über Yaw/Pitch → Quaternion →
-Basis.
-
-Mein erster Test dafür war falsch: er behauptete NaN. Es gibt kein NaN, es gibt
-Instabilität — der Test musste die Instabilität messen, nicht auf ein Symptom
-prüfen, das nie auftritt.
-
-### `IWICBitmapScaler` tauscht Rot und Blau
-
-Der Formatwandler stand *vor* dem Skalierer in der WIC-Kette und wurde still
-überstimmt. Bewiesen, indem ich den Skalierer übersprang: exakte Übereinstimmung
-ohne, vertauschte Werte mit. Das hat auch alle Normalmaps beschädigt — R war
-tatsächlich B, also die z-Komponente als x. Behoben durch die Reihenfolge
-Frame → Skalierer → Wandler.
-
-### Die Kachel, die sich nicht schließt
-
-Der Patch-Ursprung wurde modulo 2 m gefaltet, während der Shader zusätzlich bei
-23 m abtastete. 23 ist kein Vielfaches von 2, also sprang die Makroschicht an
-**jeder** Patchgrenze. Behoben mit 24 m und Faltung modulo der Makrokachel; ein
-`static_assert` prüft die Teilbarkeit und ich habe verifiziert, dass er bei 23
-auslöst.
-
-### Zwei Messfallen, die mich Stunden gekostet haben
-
-`cmd //c "build.bat Release"` aus einer Bash-Shell schlägt fehl und gibt nur
-*„'build.bat' is not recognized"* aus. In `grep -c "error C"` gepipet kommt 0
-zurück — was genau wie ein sauberer Build aussieht. Drei A/B-Experimente
-hintereinander kamen bytegleich zurück, jedes sah nach einem echten Befund über
-den Renderer aus, und alle drei waren dasselbe unveränderte Binary. Aufgeflogen
-ist es, als ich den Fragment-Shader auf reines Rot zwang und sich *immer noch*
-nichts änderte.
-
-Und `Set-Content -Encoding utf8` schreibt in Windows PowerShell 5.1 ein **BOM**.
-C++ verträgt das, GLSL nicht: `#version` bricht, der Build meldet den Fehler und
-trotzdem Erfolg für die Exe, und der Screenshot benutzt still die alte `.spv`.
-
-Seitdem: bauen nur über PowerShell, `Build OK` verifizieren, bei Shader-Änderungen
-den Zeitstempel der `.spv` prüfen — und wenn ein A/B bytegleich zurückkommt, es
-**nicht** interpretieren, sondern erst den Build beweisen.
-
-### Weitere, kurz
-
-- **Schieberegler-Identität war ein lokales float.** Einen Regler zu ziehen zog
-  jede Zeile darunter mit, was den Parametersatz ungültig machte, worauf der
-  Planet den Neuaufbau verweigerte. Drei Symptome, eine Ursache.
-- **UI-Farben ausgewaschen.** Die Swapchain ist `_SRGB`, display-authored Farben
-  sind also gamma-kodiert. Mein eigener Kommentar behauptete, Dekodierung sei
-  unnötig — er war falsch.
-- **Mausrad zweimal verbraucht.** `consumeWheel()` löscht beim Lesen, der Editor
-  bekam also immer Null.
-- **Hängender Zeiger nach `init()`**, das die Welt ersetzte: halbierte die
-  Dreieckszahl und kostete den Landetest ein Bein, ohne eine einzige Fehlermeldung.
-- **`memcmp` auf einer Parameterstruktur.** Padding ist nicht garantiert
-  initialisiert; ersetzt durch Feldvergleich mit `static_assert` auf die Größe.
-- **Physik und Rendering auf verschiedenen Planeten.** Der Bodenabfrager baute
-  sich seine eigene Standardwelt — das Schiff landete auf unsichtbarem Gelände.
-- **Terrassierte Plateaus brachen den Geomorph.** Riser 0,10 bei Mischung 0,85
-  erzeugt ~1,5 km hohe Wände, die das halbaufgelöste Elterngitter nicht auflösen
-  kann. Bisektiert (Grabenbrüche allein grün, Plateaus allein rot), gelöst bei
-  0,22/0,60.
-- **Die Culling-Schranke für Gebirge war 1 km zu klein** (4000 m gegen Ketten bis
-  5060 m). Ein Patch, dessen 5×5-Gitter den Grat verfehlt, konnte weggeschnitten
-  werden, während man ihn sieht.
+**4. A test that can pass on 8 samples is not measuring what it names.** Three of
+my own tests were built that way. The crest-walk test marched 64 km of a 1287 km
+chain and satisfied its tortuosity band doing so; the walked length is now part of
+the assertion. The uniqueness test scored `peakRelief` as a dimension of
+difference — a field the terrain **never reads**. And the test that was supposed
+to guard the LOD sphere checked it against the same wrong surface the code did.
 
 ---
 
-## Was noch kommt
+## Technical difficulties
 
-**Vegetation über ein PCG-System.** Der Streuobjekt-Generator ist im Kern schon
-einer: deterministisches Punktgitter auf der Würfelfläche, nahtkonsistent, Dichte
-aus dem Gelände, Ausrichtung an der echten Oberflächennormale, Aufbau im
-Hintergrund-Job. Was fehlt, in dieser Reihenfolge:
+The interesting ones. Every number here is measured, not estimated.
 
-1. **Echtes Instancing.** Heute ein Draw-Call pro Objekt — gemessen 4,83 ms
-   Command-Recording für 1580 Draws, bei 11,1 ms Budget. Die Zeit ist linear in
-   der Instanzzahl, 30 000 Bäume wären ~100 ms nur fürs Aufzeichnen. Das ist
-   keine Optimierung, sondern Voraussetzung.
-2. **glTF-Loader** für Baummodelle.
-3. **Auto-LOD beim Laden**: Kantenkollaps zu drei Stufen plus Billboard-Impostor,
-   damit ich keine LODs mitliefern muss.
-4. **Die PCG-Schicht**: Arten, Dichte aus dem Kronendach-Feld (steht schon),
-   Ausschlussregeln zwischen den Schichten, Lichtungen.
-5. **Reichweite** von 450 m auf Kilometer.
+### The tight LOD sphere bounded a surface no vertex lies on
 
-*Nanite ausdrücklich nicht.* Der Renderer hat null Compute-Pipelines, null
-Indirect-Draws und keine Mesh-Shader — das wäre ein Neubau. Und für
-alphagetestetes Laub ist es ohnehin das falsche Werkzeug.
+The sphere the LOD uses to measure its distance to a patch was built from
+`terrainRadius` — and the detail band and the rock spires are added on top of
+that, afterwards. So every vertex sat **outside** its own sphere by roughly the
+local detail height. Because the split rule measures distance as
+`|cam − centre| − surfaceRadius`, and the geomorph band is derived from the same
+relationship, a patch was given up *before* its vertices had finished morphing:
+at level 17, least-morphed vertex 0.0000 with 0.27 m of pop left.
 
-**Gelände.**
-- **Per-Oktave-Glättung der Ridge-Faltung.** Eine Konstante ist ein Kompromiss:
-  scharf genug für Grate heißt scharf genug für Kratzer. Auf Landform-Skala
-  scharf und auf Meter-Skala weich braucht unterschiedliche ε pro Oktave.
-- **Schutthalden am Wandfuß.** Neigung p99 liegt bei 70,7°, Maximum 88,6° — die
-  Felstürme treffen senkrecht auf flachen Boden. Eine echte Wand hat einen Fuß.
-- **Segmentierte Ketten** (en échelon), überlappende Teilketten mit Pässen
-  dazwischen.
-- **Entwässerung.** Der wirkliche Grund, warum echtes Gelände echt aussieht.
-  Richtig gemacht braucht das Abflussakkumulation über den ganzen Planeten.
+The test that was meant to catch exactly this compared against `terrainRadius`
+too — so it passed while the invariant was violated. Both corrected: worst slack
+is now 0.0 m at 13×13 sampling, and the morph is 1.0000 at every level.
+
+Plain slack would have been the wrong fix here: 3 km added to a 12 m sphere makes
+the distance ≈ 0 and subdivides everything to maximum depth — that is the
+461,517-leaf collapse the file header documents. Sampling the real surface moves
+the **centre** with it, so the sphere stays tight.
+
+### "Dune waves": the corner in `ridge(n) = (1 − |n|)²`
+
+Fine dark filaments in closed loops all over flat ground, everywhere. The
+derivative jumps from +2 to −2 at n = 0 — a genuine corner, and it is *deliberate*,
+it is what makes knife-edged ridges. But the noise crosses zero everywhere,
+including where the band carries almost no amplitude, and the zero level sets of a
+noise field are **closed loops**.
+
+Two cuts settled it: with every scanned texture switched off they remain (so:
+geometry, not material), and with the ridge fold switched off they vanish. In
+between I ruled out terracing, plateau terracing, the rock spires and the
+triplanar projection — all innocent.
+
+Fixed with `sqrt(n² + ε²) − ε`, normalised so `ridge(±1)` still reaches the valley
+floor exactly. The first attempt failed a different test: giving the softening to
+**both** consumers moved the relief-versus-elevation correlation from 0.155 to
+0.204 against a 0.20 bar, because the fold's distribution is what places the
+relief quantiles. Separated — sharp for the relief field, soft for the height band
+— it sits at 0.106.
+
+### Why you must not warp the input of a high-frequency field spatially
+
+I wanted ribs running down a mountain flank, so I squashed the detail band across
+the belt, faded in with the range's own height. I got ribs — and concentric
+contour rings over every mountain on the planet.
+
+The arithmetic says why: the detail band is sampled at a base frequency of ~345,
+so a displacement of 0.33 in the input is **114 noise periods**. The squash factor
+varied with `|orogeny|`, whose level sets run parallel to the ridge — so the noise
+slid by dozens of periods along exactly those lines, and the sliding drew them.
+Any spatially varying warp of a high-frequency field does this; only a constant
+one is safe, and a constant one has a seam at the belt edge.
+
+### A domain warp cannot tear — but it can fold
+
+The first warp displaced the **distance** to the plate boundary by a scalar. At
+0.5 crest widths the chain was still a ruler; at 1.3 it broke into a dotted line
+of separate lumps, because a distance offset moves each point of the crest
+independently and pulls it apart.
+
+Applied to the **input**, the field moves coherently and the chain can no longer
+tear. But it can fold. Tortuosity against warp frequency at amplitude 0.20:
+2.5 → 1.06 (a ruler), 6.0 → 1.60 (good), 10.0 → **17.1**, 16.0 → the chain
+fragments after 144 km. The last two are the same failure: a domain warp stops
+being **injective** once the displacement gradient reaches 1, and then one
+boundary has several preimages. So the test checks a **band**; one-sided, it would
+have passed the 17.1 with flying colours.
+
+### The zenith flip: `cos(π/2) = −4.4·10⁻⁸`
+
+The camera basis was built from `right = cross(worldUp, forward)`. With `forward`
+pointing almost straight up the cross product is almost zero — and in float
+`cos(π/2)` is not 0 but −4.4·10⁻⁸. The normalised vector then points in an
+arbitrary direction and **swings 180° for 10⁻⁴ radians of pitch**. Measured:
+180.0° (Euler) against 0.0198° (quaternion). Fixed via yaw/pitch → quaternion →
+basis.
+
+My first test for it was wrong: it asserted NaN. There is no NaN, there is
+instability — the test had to measure the instability, not check for a symptom
+that never occurs.
+
+### `IWICBitmapScaler` swaps red and blue
+
+The format converter sat *before* the scaler in the WIC chain and was silently
+overruled. Proven by bypassing the scaler: an exact match without it, reversed
+values with it. This had also corrupted every normal map — R was actually B, i.e.
+the z component as x. Fixed by ordering it frame → scaler → converter.
+
+### The tile that would not close
+
+The patch origin was folded modulo 2 m while the shader also sampled at 23 m. 23
+is not a multiple of 2, so the macro layer jumped at **every** patch boundary.
+Fixed with 24 m and a fold modulo the macro tile; a `static_assert` checks the
+divisibility, and I verified that it fires at 23.
+
+### Two measurement traps that cost me hours
+
+`cmd //c "build.bat Release"` from a Bash shell fails and prints only *"'build.bat'
+is not recognized"*. Piped into `grep -c "error C"` it returns 0 — which reads
+exactly like a clean build. Three A/B experiments in a row came back
+byte-identical, each looked like a real finding about the renderer, and all three
+were the same unchanged binary. It surfaced only when I forced the fragment shader
+to pure red and *still* nothing changed.
+
+And `Set-Content -Encoding utf8` writes a **BOM** in Windows PowerShell 5.1. C++
+tolerates it, GLSL does not: `#version` breaks, the build reports the error and
+success for the exe anyway, and the screenshot silently uses the stale `.spv`.
+
+Since then: build only through PowerShell, verify `Build OK`, check the `.spv`
+timestamp on shader edits — and when an A/B comes back byte-identical, do **not**
+interpret it; prove the build first.
+
+### Others, briefly
+
+- **Slider identity was a local float.** Dragging one slider dragged every row
+  below it, which walked the parameter set invalid, whereupon the planet refused to
+  rebuild. Three symptoms, one cause.
+- **UI colours washed out.** The swapchain is `_SRGB`, so display-authored colours
+  are gamma-encoded. My own comment claimed decoding was unnecessary — it was
+  wrong.
+- **The mouse wheel was consumed twice.** `consumeWheel()` clears as it reads, so
+  the editor always got zero.
+- **A dangling pointer after `init()`** replaced the world: it halved the triangle
+  count and cost the landing test a leg, without a single error message.
+- **`memcmp` on a parameter struct.** Padding is not guaranteed to be initialised;
+  replaced with a field comparison guarded by a `static_assert` on the size.
+- **Physics and rendering on different planets.** The ground query built its own
+  default world — the ship landed on invisible terrain.
+- **Terraced plateaus broke the geomorph.** A riser of 0.10 at a mix of 0.85
+  creates ~1.5 km walls that the parent's half-resolution grid cannot resolve.
+  Bisected (rifts alone green, plateaus alone red), resolved at 0.22/0.60.
+- **The culling slack for mountains was 1 km short** (4000 m against ranges up to
+  5060 m). A patch whose 5×5 sample grid missed the spine could be culled while
+  visible.
+
+---
+
+## What is still to come
+
+**Vegetation through a PCG system.** The scatter generator is already one at
+heart: a deterministic point grid on the cube face, seam-consistent, density from
+the terrain, aligned to the true surface normal, built in a background job. What
+is missing, in this order:
+
+1. **Real instancing.** Today it is one draw call per object — measured 4.83 ms of
+   command recording for 1580 draws, against an 11.1 ms budget. The time is linear
+   in the instance count, so 30,000 trees would be ~100 ms of recording alone.
+   That is not an optimisation, it is a precondition.
+2. **A glTF loader** for tree models.
+3. **Auto-LOD at load time**: edge collapse to three levels plus a billboard
+   impostor, so I do not have to ship LODs.
+4. **The PCG layer**: species, density from the canopy field (already there),
+   exclusion rules between layers, clearings.
+5. **Range**, from 450 m out to kilometres.
+
+*Explicitly not Nanite.* The renderer has zero compute pipelines, zero indirect
+draws and no mesh shaders — that would be a rebuild. And for alpha-tested foliage
+it is the wrong tool anyway.
+
+**Terrain.**
+- **Per-octave softening of the ridge fold.** One constant is a compromise: sharp
+  enough for crests means sharp enough for scratches. Sharp at landform scale and
+  smooth at metre scale needs a different ε per octave.
+- **Talus aprons at the foot of a cliff.** Slope p99 is 70.7° and the maximum
+  88.6° — the rock spires meet flat ground vertically. A real cliff has a foot.
+- **Segmented ranges** (en échelon), overlapping sub-ranges with passes between
+  them.
+- **Drainage.** The real reason natural terrain looks natural. Done properly it
+  needs flow accumulation across the whole planet.
 
 **Rendering.**
-- **Triplanar neu projizieren.** Auf **42 % der Kugel** trägt die zweite
-  Projektion ≥15 % Gewicht, im Extremfall 50/50 — zwei versetzte Kopien derselben
-  Textur. Ein höherer Mischexponent schrumpft die Fläche auf 5,9 %, aber der
-  Worst Case bleibt bei 0,500: auf der 45°-Linie sind zwei Komponenten *gleich*
-  groß, und jede Potenz lässt sie gleich groß. Die Lösung stößt auf zwei echte
-  Hindernisse — eine oberflächenfolgende Projektion bricht die Modulo-Rechnung,
-  die es nur wegen der float-Genauigkeit bei 10⁶ m gibt, und ein stetiges
-  Tangentenfeld auf einer Kugel hat nach dem Satz vom Igel zwangsläufig eine
-  Singularität.
-- **Blattbudget mit Prioritätswarteschlange** statt des heutigen
-  höhenabhängigen Split-Faktors. Der ist ein Stellvertreter: er verteilt das
-  Budget danach, wie viel Planet im Bild ist, und funktioniert, aber die
-  saubere Regel ist „unterteile den Patch mit dem größten Bildschirmfehler, bis
-  das Budget aufgebraucht ist".
-- **Wolken, Monde, ein Gasriese am Himmel.**
+- **Reproject the triplanar mapping.** On **42% of the sphere** the second
+  projection carries ≥15% of the weight, up to 50/50 — two offset copies of the
+  same texture. A higher blend exponent shrinks that area to 5.9%, but the worst
+  case stays at 0.500: on the 45° line two components are *equal*, and no power
+  makes them unequal. The fix runs into two real obstacles — a surface-following
+  projection breaks the modulo arithmetic that only exists because of float
+  precision at 10⁶ m, and a continuous tangent field on a sphere necessarily has a
+  singularity by the hairy ball theorem.
+- **A leaf budget with a priority queue** instead of today's altitude-dependent
+  split factor. That factor is a proxy: it allocates the budget by how much planet
+  is in view, and it works, but the clean rule is "split the patch with the largest
+  screen-space error until the budget runs out".
+- **Clouds, moons, a gas giant in the sky.**
 
-**Assets.** Zwei der sechs Bodenmaterialien sind noch generierte Platzhalter, und
-mir fehlt ein heller Gras-/Moos-Scan — die Lichtungs-Variante ist deshalb
-abgeschaltet, weil die einzig verfügbare Textur dafür sich wie Strandsand liest.
-Das Mechanismus steht, es fehlt nur die Textur.
+**Assets.** Two of the six ground materials are still generated placeholders, and
+I am missing a bright grass/moss scan — the clearing variant is switched off
+because the only texture available for it reads like beach sand. The mechanism is
+in place; only the texture is missing.
 
 ---
 
-## Bauen
+## Building
 
 ```
 build.bat            :: Release -> build\Release\planet.exe
-build.bat Debug      :: mit Vulkan-Validierung
+build.bat Debug      :: with Vulkan validation
 build.bat Release run
 ```
 
-Braucht Visual Studio mit MSVC und das Vulkan SDK. Die Pfade zu `vcvars64.bat`
-und Ninja stehen oben in `build.bat`.
+Needs Visual Studio with MSVC and the Vulkan SDK. The paths to `vcvars64.bat` and
+Ninja are at the top of `build.bat`.
 
 Tests:
 
@@ -327,7 +318,7 @@ Tests:
 build\Release\planet_tests.exe
 ```
 
-Die Abnahmeläufe, die ich nach jeder Geländeänderung durchziehe:
+The acceptance runs I go through after every terrain change:
 
 ```
 build\Release\planet.exe --flight-test 6000 --validate
@@ -338,19 +329,19 @@ build\Release\planet.exe --cockpit --look-down 24 --frames 200 --validate
 build\Release\planet.exe --frames 600 --creative-at 200 --validate
 ```
 
-Nützliche Flaggen zum Anschauen: `--spawn-range` parkt die Kamera auf einer
-Gebirgskette, `--spawn-canopy` an einer Waldkante, `--spawn-spire` in einer
-Turmprovinz — ohne die findet kein Screenshot je eines dieser Dinge, weil sie
-zusammen nur wenige Prozent der Landfläche bedecken.
+Useful flags for looking around: `--spawn-range` parks the camera on a mountain
+range, `--spawn-canopy` at a forest edge, `--spawn-spire` in a spire province —
+without them no screenshot will ever find any of these, because together they
+cover only a few per cent of the land.
 
-## Was nicht im Repo liegt
+## What is not in the repository
 
-`src/textures/` (308 MB gescannte Bodenmaterialien) und `src/example/`
-(Referenzbilder) sind fremde Assets und ausgeschlossen. Der Loader sucht
-rekursiv unter `src/textures` und akzeptiert nur Ordner, die auch eine Basecolor
-enthalten — die Struktur ist also frei wählbar, und **fehlende Materialien sind
-kein Fehler**: der Renderer setzt generierte Platzhalter ein, damit die Welt
-immer zeichnet. Die Startzeile druckt, welcher Ordner für welche Schicht
-gefunden wurde.
+`src/textures/` (308 MB of scanned ground materials) and `src/example/` (art
+direction reference images) are third-party assets and are excluded. The loader
+searches recursively under `src/textures` and only accepts a folder that also
+holds a base colour map — so the layout is free to change, and **a missing
+material is not an error**: the renderer substitutes a generated placeholder so
+the world always draws. The startup line prints which folder resolved to which
+layer.
 
-`shots/` (Screenshots) ist ebenfalls ausgeschlossen.
+`shots/` (rendered screenshots) is excluded as well.
