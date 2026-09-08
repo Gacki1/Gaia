@@ -1,0 +1,21 @@
+# Build output
+/build/
+/build_review/
+/out/
+
+# Third-party assets, not mine to redistribute: 308 MB of scanned ground
+# materials and the art-direction reference images. The loader searches
+# src/textures recursively and substitutes generated placeholders for anything
+# it cannot find, so the project builds and runs without them.
+/src/textures/
+/src/example/
+
+# Rendered output
+/shots/
+
+# Local scratch / preflight artifacts
+_*.png
+_*.ppm
+_*.txt
+_*.log
+*.ppm

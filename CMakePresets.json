@@ -1,0 +1,20 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 16, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "Ninja Multi-Config (MSVC)",
+      "description": "Configure with the VS-bundled Ninja. Run from an x64 Native Tools command prompt (or use build.bat, which loads it automatically). Only the Vulkan SDK is required.",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_MAKE_PROGRAM": "F:/Microsoft Visual Studio/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "release", "configurePreset": "default", "configuration": "Release" },
+    { "name": "debug",   "configurePreset": "default", "configuration": "Debug" }
+  ]
+}
